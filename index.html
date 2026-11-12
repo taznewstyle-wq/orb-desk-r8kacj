@@ -87,7 +87,7 @@
       try { localStorage.removeItem(STORE); } catch (e) {}
     }
     function authHeaders() {
-      return { Authorization: "Bearer " + token(), "Cache-Control": "no-store" };
+      return { Authorization: "Bearer " + token() };
     }
     function show(el) { el.classList.add("show"); }
     function hide(el) { el.classList.remove("show"); }
