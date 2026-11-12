@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Roland's Paper Trader</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #08080b; color: #f4eef2; font-family: system-ui, sans-serif; }
+    iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #08080b; }
+    #gate, #m {
+      position: fixed; inset: 0; display: none; place-items: center;
+      text-align: center; padding: 24px; background: #08080b;
+    }
+    #gate.show, #m.show { display: grid; }
+    #m { font-size: 14px; color: #ffb3c0; letter-spacing: .08em; z-index: 2; }
+    #m small { display: block; margin-top: 10px; color: #9a8f96; letter-spacing: 0; font-size: 12px; }
+    .card {
+      width: min(360px, 100%); padding: 32px 28px 28px;
+      border: 1px solid #2a2226; border-radius: 20px;
+      background: radial-gradient(circle at 50% 0%, #3a1018 0%, #120c0e 55%, #08080b 100%);
+      box-shadow: 0 0 80px rgba(180, 20, 40, .18);
+    }
+    .orb {
+      width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ff6b7d, #c4122a 55%, #4a0610 100%);
+      box-shadow: 0 0 28px rgba(220, 30, 50, .55);
+    }
+    h1 { margin: 0 0 6px; font-size: 20px; font-weight: 650; letter-spacing: .02em; }
+    .sub { margin: 0 0 22px; color: #9a8f96; font-size: 13px; }
+    label { display: block; text-align: left; font-size: 12px; color: #c9b6bc; margin-bottom: 6px; }
+    input[type=password] {
+      width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px;
+      border: 1px solid #3a3034; background: #140c0e; color: #f4eef2; font-size: 16px;
+    }
+    input[type=password]:focus { outline: 2px solid #c4122a; border-color: transparent; }
+    button#go {
+      width: 100%; margin-top: 14px; padding: 12px 14px; border: 0; border-radius: 10px;
+      background: #c4122a; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    button#go:disabled { opacity: .6; cursor: default; }
+    #err { min-height: 18px; margin: 10px 0 0; color: #ff8a96; font-size: 13px; }
+    #logout {
+      position: fixed; top: 12px; right: 12px; z-index: 5; display: none;
+      padding: 7px 12px; border-radius: 999px; border: 1px solid #3a3034;
+      background: rgba(8, 8, 11, .82); color: #f4eef2; font-size: 12px; cursor: pointer;
+    }
+    #logout.show { display: block; }
+  </style>
+</head>
+<body>
+  <button id="logout" type="button">Log out</button>
+  <div id="m">Loading Roland's Paper Trader…</div>
+  <div id="gate">
+    <form class="card" id="login" autocomplete="current-password">
+      <div class="orb" aria-hidden="true"></div>
+      <h1>Roland's Paper Trader</h1>
+      <p class="sub">Private paper desk. This device stays signed in after a correct password.</p>
+      <label for="pw">Password</label>
+      <input id="pw" name="password" type="password" required autofocus>
+      <button id="go" type="submit">Open dashboard</button>
+      <p id="err" role="alert"></p>
+    </form>
+  </div>
+  <iframe id="f" title="Roland's Paper Trader dashboard"></iframe>
+  <script>
+  (function () {
+    var BASE = "https://abqbxcpgvlmyhooakdmo.supabase.co/functions/v1/rol-trader-dash/d-VysQJZdSemR9p5c5SatCJkvs/";
+    var STORE = "rolDeskSession";
+    var f = document.getElementById("f");
+    var m = document.getElementById("m");
+    var gate = document.getElementById("gate");
+    var logout = document.getElementById("logout");
+    var err = document.getElementById("err");
+    var go = document.getElementById("go");
+    var last = "";
+    var timer = null;
+
+    function token() {
+      try { return localStorage.getItem(STORE) || ""; } catch (e) { return ""; }
+    }
+    function saveToken(t) {
+      try { localStorage.setItem(STORE, t); } catch (e) {}
+    }
+    function clearToken() {
+      try { localStorage.removeItem(STORE); } catch (e) {}
+    }
+    function authHeaders() {
+      return { Authorization: "Bearer " + token(), "Cache-Control": "no-store" };
+    }
+    function show(el) { el.classList.add("show"); }
+    function hide(el) { el.classList.remove("show"); }
+
+    function showLogin(message) {
+      last = "";
+      if (timer) { clearInterval(timer); timer = null; }
+      f.removeAttribute("srcdoc");
+      hide(m); hide(logout);
+      if (message) err.textContent = message;
+      else err.textContent = "";
+      show(gate);
+      var pw = document.getElementById("pw");
+      try { pw.focus(); } catch (e) {}
+    }
+
+    function signedOut() {
+      clearToken();
+      showLogin("Please sign in.");
+    }
+
+    function withAuth(html, t) {
+      var base = '<base href="' + BASE + '">';
+      var boot = "<script>(function(){var t=" + JSON.stringify(t) + ",b=" + JSON.stringify(BASE) +
+        ",o=window.fetch;window.fetch=function(i,n){n=n||{};var u=typeof i===\"string\"?i:(i&&i.url)||\"\";" +
+        "var abs;try{abs=new URL(u,b).href;}catch(e){abs=u}if(abs.indexOf(b)===0){var h=new Headers(n.headers||(i&&i.headers)||{});" +
+        "if(!h.has(\"Authorization\"))h.set(\"Authorization\",\"Bearer \"+t);n=Object.assign({},n,{headers:h});}" +
+        "return o.call(this,i,n);};})();<\/script>";
+      if (/<base\b/i.test(html)) html = html.replace(/<base\b[^>]*>/i, base);
+      if (/<head[^>]*>/i.test(html)) html = html.replace(/<head([^>]*)>/i, "<head$1>" + ( /<base\b/i.test(html) ? "" : base ) + boot);
+      else html = base + boot + html;
+      return html;
+    }
+
+    function load() {
+      var t = token();
+      if (!t) { showLogin(""); return; }
+      fetch(BASE + "dashboard.html?" + Date.now(), { cache: "no-store", headers: authHeaders() })
+        .then(function (r) {
+          if (r.status === 401) { signedOut(); throw new Error("unauthorized"); }
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        })
+        .then(function (html) {
+          if (html === last) return;
+          var y = 0;
+          try { y = f.contentWindow.scrollY; } catch (e) {}
+          last = html;
+          hide(gate); show(logout);
+          f.srcdoc = withAuth(html, t);
+          f.onload = function () {
+            hide(m);
+            try { f.contentWindow.scrollTo(0, y); } catch (e) {}
+          };
+        })
+        .catch(function (e) {
+          if (!token()) return;
+          show(m);
+          m.innerHTML = "Dashboard temporarily unavailable (" + e.message + "). Retrying…<small>Your session is still on this device.</small>";
+        });
+    }
+
+    function startSession() {
+      hide(gate); hide(m); show(logout);
+      load();
+      if (timer) clearInterval(timer);
+      timer = setInterval(load, 30000);
+    }
+
+    document.getElementById("login").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var password = document.getElementById("pw").value;
+      if (!password) return;
+      err.textContent = "";
+      go.disabled = true;
+      fetch(BASE + "login", { method: "POST", body: password, headers: { "Content-Type": "text/plain" }, cache: "no-store" })
+        .then(function (r) {
+          if (!r.ok) throw new Error(r.status === 401 ? "Wrong password." : "Sign-in failed (" + r.status + ").");
+          return r.json();
+        })
+        .then(function (j) {
+          if (!j || !j.token) throw new Error("Sign-in failed.");
+          saveToken(j.token);
+          document.getElementById("pw").value = "";
+          startSession();
+        })
+        .catch(function (e) {
+          err.textContent = e.message || "Sign-in failed.";
+        })
+        .then(function () { go.disabled = false; });
+    });
+
+    logout.addEventListener("click", function () {
+      clearToken();
+      showLogin("Signed out of this device.");
+    });
+
+    if (token()) {
+      show(m);
+      startSession();
+    } else {
+      showLogin("");
+    }
+  })();
+  </script>
+</body>
+</html>
